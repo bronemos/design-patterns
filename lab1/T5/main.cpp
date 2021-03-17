@@ -16,12 +16,14 @@ public:
 
 void printReturns(B *b)
 {
-    typedef int (*pfun)();
+    typedef int (*pfun)(B *);
+    typedef int (*pfun2)(B *, int);
 
     unsigned int vtblAddress = *(unsigned int *)b;
+
     pfun prvaVirtual = (pfun)(*(unsigned int *)(vtblAddress));
-    std::cout << prvaVirtual() << std::endl;
-    //std::cout << drugaVirtual(5) << std::endl;
+    pfun2 drugaVirtual = (pfun2)(*(unsigned int *)(vtblAddress + 4));
+    std::cout << prvaVirtual(b) << " " << drugaVirtual(b, 5) << std::endl;
 }
 
 int main()
