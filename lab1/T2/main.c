@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-typedef double (*PTRFUN)(double x);
+struct unary_function;
+
+typedef double (*PTRFUN)(struct unary_function *unaryFunction, double x);
 
 // sturctures
 
-typedef struct
+typedef struct unary_function
 {
     PTRFUN *vTable;
     int lower_bound;
@@ -27,12 +29,12 @@ typedef struct
 
 double value_at(Unary_Function *unaryFunction, double x)
 {
-    return unaryFunction->vTable[0](x);
+    return unaryFunction->vTable[0](unaryFunction, x);
 }
 
 double negative_value_at(Unary_Function *unaryFunction, double x)
 {
-    return -unaryFunction->vTable[0](x);
+    return -unaryFunction->vTable[0](unaryFunction, x);
 }
 
 PTRFUN vTable[2];
@@ -51,9 +53,9 @@ Unary_Function *createUnaryFunction(int lb, int ub)
     return unaryFunction;
 }
 
-double linear_value_at(Linear *linear, double x)
+double linear_value_at(Unary_Function *linear, double x)
 {
-    return (*linear).a * x + (*linear).b;
+    return (*(Linear *)linear).a * x + (*(Linear *)linear).b;
 }
 
 PTRFUN vTableLinear[2] = {
@@ -76,7 +78,7 @@ Unary_Function *createLinear(int lb, int ub, double a_coef, double b_coef)
     return linear;
 }
 
-double square_value_at(Square *square, double x)
+double square_value_at(Unary_Function *square, double x)
 {
     return x * x;
 }
@@ -131,6 +133,9 @@ int main(void)
 
     Unary_Function *f2 = createLinear(-2, 2, 5, -2);
     tabulate(f2);
+
+    printf("f1==f2: %s\n", same_functions_for_ints(f1, f2, 1E-6) ? "DA" : "NE");
+    printf("neg_val f2(1) = %lf\n", negative_value_at(f2, 1.0));
 
     free(f1);
     free(f2);
