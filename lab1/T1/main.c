@@ -144,10 +144,5 @@ int main(void)
 
     Animal *dogs = createNDogs(n);
 
-    for (Animal *p = dogs; p; p++)
-    {
-        printf("%s\n", (*p).name);
-    }
-
     return 0;
 }
