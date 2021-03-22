@@ -21,7 +21,7 @@ LFB16:
 	mov	DWORD PTR [eax], edx
 	mov	eax, DWORD PTR [ebp-12]
 	mov	ecx, eax
-	call	__ZN4Base6metodaEv
+	call	__ZN4Base6metodaEv											; zove se metoda bazne klase
 	nop
 	leave
 	.cfi_restore 5
