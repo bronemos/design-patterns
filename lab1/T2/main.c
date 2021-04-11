@@ -59,8 +59,8 @@ double linear_value_at(Unary_Function *linear, double x)
 }
 
 PTRFUN vTableLinear[2] = {
-    (PTRFUN)linear_value_at,
-    (PTRFUN)negative_value_at};
+    linear_value_at,
+    negative_value_at};
 
 void constructLinear(Linear *linear, int lb, int ub, double a_coef, double b_coef)
 {
@@ -84,8 +84,8 @@ double square_value_at(Unary_Function *square, double x)
 }
 
 PTRFUN vTableSquare[2] = {
-    (PTRFUN)square_value_at,
-    (PTRFUN)negative_value_at};
+    square_value_at,
+    negative_value_at};
 
 void constructSquare(Square *square, int lb, int ub)
 {
