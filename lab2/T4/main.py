@@ -1,5 +1,6 @@
 import random
 import math
+from copy import deepcopy
 
 
 class DistributionTester:
@@ -13,7 +14,7 @@ class DistributionTester:
 
     @property
     def sequence(self):
-        return self._sequence
+        return deepcopy(self._sequence)
 
     def calculate_percentile(self, p):
         return self.percentile_function(self.sequence, p)
