@@ -95,6 +95,7 @@ class SlijedBrojeva(TargetClass):
 
 def main():
     sequence = SlijedBrojeva(TipkovnickiIzvor())
+    sequence.kreni()
 
 
 if __name__ == '__main__':
