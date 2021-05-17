@@ -41,6 +41,64 @@ class LocationRange:
         return self.__end
 
 
+class ClipboardObserver:
+    def update_clipboard(self):
+        raise NotImplementedError
+
+
+class ClipboardStack:
+    def __init__(self):
+        self.__clipboard_observers: List[ClipboardObserver] = list()
+        self.__stack: List[str] = list()
+
+    def push(self, text: str) -> None:
+        self.__stack.append(text)
+
+    def pop(self) -> str:
+        return self.__stack.pop()
+
+    def top(self) -> str:
+        return self.__stack[-1]
+
+    def is_empty(self) -> bool:
+        return len(self.__stack) == 0
+
+    def attach_clipboard_observer(self, clipboard_observer: ClipboardObserver) -> None:
+        self.__clipboard_observers.append(clipboard_observer)
+
+    def detach_clipboard_observer(self, clipboard_observer: ClipboardObserver) -> None:
+        self.__clipboard_observers.remove(clipboard_observer)
+
+    def notify_clipboard(self):
+        [
+            clipboard_observer.update_clipboard()
+            for clipboard_observer in self.__clipboard_observers
+        ]
+
+
+class EditAction:
+    def execute_do(self):
+        raise NotImplementedError
+
+    def execute_undo(self):
+        raise NotImplementedError
+
+
+class UndoManager:
+    def __init__(self):
+        self.__undo_stack: List[EditAction] = list()
+        self.__redo_stack: List[EditAction] = list()
+
+    def undo(self) -> None:
+        fun = self.__undo_stack.pop()
+        fun.execute_undo()
+        self.__redo_stack.append(fun)
+
+    def push(self, fun: EditAction) -> None:
+        self.__redo_stack = list()
+        self.__undo_stack.append(fun)
+
+
 class CursorObserver:
     def update_cursor_location(self, loc: Location) -> None:
         raise NotImplementedError
@@ -76,8 +134,14 @@ class TextEditorModel:
     def attach_cursor_observer(self, cursor_observer: CursorObserver) -> None:
         self.__cursor_observers.append(cursor_observer)
 
+    def detach_cursor_observer(self, cursor_observer: CursorObserver) -> None:
+        self.__cursor_observers.remove(cursor_observer)
+
     def attach_text_observer(self, text_observer: TextObserver) -> None:
         self.__text_observers.append(text_observer)
+
+    def detach_text_observer(self, text_observer: TextObserver) -> None:
+        self.__text_observers.remove(text_observer)
 
     def notify_cursor(self) -> None:
         [
