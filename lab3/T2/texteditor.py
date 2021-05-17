@@ -1,7 +1,8 @@
 from abc import ABC
 import tkinter as tk
 import tkinter.font as tkfont
-from typing import Iterator, Union, List
+from typing import Iterator, List
+from copy import deepcopy
 
 
 class Location:
@@ -53,7 +54,7 @@ class TextObserver:
 class TextEditorModel:
     def __init__(self, lines_string: str):
         self.__lines = lines_string.split("\n")
-        self.__selection_range = Location(0, 0)
+        self.__selection_range = LocationRange(Location(0, 0), Location(0, 0))
         self.__cursor_location = Location(0, 0)
         self.__cursor_observers: List[CursorObserver] = list()
         self.__text_observers: List[TextObserver] = list()
@@ -72,35 +73,6 @@ class TextEditorModel:
     def lines_range(self, index_1: int, index_2: int) -> Iterator:
         return iter(self.__lines[index_1:index_2])
 
-    def move_cursor_left(self, event) -> None:
-        print(event)
-        self.__cursor_location.x -= 1
-        self.notify_cursor()
-
-    def move_cursor_right(self, event) -> None:
-        print(event)
-        self.__cursor_location.x += 1
-        self.notify_cursor()
-
-    def move_cursor_up(self, event) -> None:
-        print(event)
-        self.__cursor_location.y -= 1
-        self.notify_cursor()
-
-    def move_cursor_down(self, event) -> None:
-        print(event)
-        self.__cursor_location.y += 1
-        self.notify_cursor()
-
-    def delete_before(self, event) -> None:
-        self.notify_text()
-
-    def delete_after(self, event) -> None:
-        self.notify_text()
-
-    def delete_range(self, range: LocationRange) -> None:
-        self.notify_text()
-
     def attach_cursor_observer(self, cursor_observer: CursorObserver) -> None:
         self.__cursor_observers.append(cursor_observer)
 
@@ -116,45 +88,160 @@ class TextEditorModel:
     def notify_text(self) -> None:
         [text_observer.update_text() for text_observer in self.__text_observers]
 
+    def move_cursor_left(self, event: tk.Event) -> None:
+        if self.__cursor_location.x > 0:
+            self.__cursor_location.x -= 1
+            if event.state & 0x1 != 0:
+                pass
+            else:
+                self.selection_range = LocationRange(
+                    deepcopy(self.__cursor_location), deepcopy(self.__cursor_location)
+                )
+            print(self.selection_range.start.x, self.selection_range.end.x)
+            self.notify_cursor()
+
+    def move_cursor_right(self, event: tk.Event) -> None:
+        self.__cursor_location.x += 1
+        if event.state & 0x1 != 0:
+            pass
+        else:
+            self.selection_range = LocationRange(
+                deepcopy(self.__cursor_location), deepcopy(self.__cursor_location)
+            )
+        print(self.selection_range.start.x, self.selection_range.end.x)
+        self.notify_cursor()
+
+    def move_cursor_up(self, event: tk.Event) -> None:
+        if self.__cursor_location.y > 0:
+            self.__cursor_location.y -= 1
+            if event.state & 0x1 != 0:
+                self.selection_range.start.y -= 1
+            self.notify_cursor()
+
+    def move_cursor_down(self, event: tk.Event) -> None:
+        self.__cursor_location.y += 1
+        if event.state & 0x1 == 0:
+            self.selection_range.end.y += 1
+        self.notify_cursor()
+
+    def delete_before(self, event: tk.Event) -> None:
+        if (
+            self.selection_range.end.x - self.selection_range.start.x == 0
+            and self.selection_range.end.y - self.selection_range.start.y == 0
+        ):
+            if self.__cursor_location.x > 0:
+                self.__lines[self.__cursor_location.y] = (
+                    self.__lines[self.__cursor_location.y][
+                        : self.__cursor_location.x - 1
+                    ]
+                    + self.__lines[self.__cursor_location.y][self.__cursor_location.x :]
+                )
+                self.move_cursor_left(event)
+        else:
+            pass
+        self.notify_text()
+
+    def delete_after(self, event: tk.Event) -> None:
+        if (
+            self.selection_range.end.x - self.selection_range.start.x == 0
+            and self.selection_range.end.y - self.selection_range.start.y == 0
+        ):
+            self.__lines[self.__cursor_location.y] = (
+                self.__lines[self.__cursor_location.y][: self.__cursor_location.x]
+                + self.__lines[self.__cursor_location.y][self.__cursor_location.x + 1 :]
+            )
+            self.notify_text()
+        else:
+            pass
+
+    def delete_range(self, range: LocationRange) -> None:
+
+        self.notify_text()
+
+    def insert(self, event: tk.Event):
+        string = event.char
+        if string == "\r":
+            self.__lines.insert(
+                self.__cursor_location.y + 1,
+                self.__lines[self.__cursor_location.y][self.__cursor_location.x :],
+            )
+            self.__lines[self.__cursor_location.y] = self.__lines[
+                self.__cursor_location.y
+            ][: self.__cursor_location.x]
+            self.__cursor_location.x = 0
+            self.__cursor_location.y += 1
+        else:
+            self.__lines[self.__cursor_location.y] = (
+                self.__lines[self.__cursor_location.y][: self.__cursor_location.x]
+                + string
+                + self.__lines[self.__cursor_location.y][self.__cursor_location.x :]
+            )
+            self.__cursor_location.x += len(string)
+        self.notify_text()
+        self.notify_cursor()
+
 
 class TextEditor(tk.Tk, CursorObserver, TextObserver):
     def __init__(self, text_editor_model: TextEditorModel):
         super().__init__()
-        self.__font = tkfont.Font(family="Consolas", size=12, weight="normal")
+        self.__lines = list()
+        self.__padding = 4
+        self.__font = tkfont.Font(family="Consolas", size=10, weight="normal")
         self.__font_width = self.__font.measure("a")
-        self.__font_height = self.__font.metrics("ascent")
+        self.__font_height = self.__font.metrics("linespace")
         self.__canvas = tk.Canvas(self)
         self.__text_editor_model = text_editor_model
         self.__text_editor_model.attach_cursor_observer(self)
-        self.__cursor = self.__canvas.create_line(0, 0, 0, 13,)
+        self.__text_editor_model.attach_text_observer(self)
+        self.__cursor = self.__canvas.create_line(
+            self.__padding,
+            self.__padding,
+            self.__padding,
+            self.__font_height + self.__padding,
+        )
         self.update_text()
         self.bind("<Up>", self.__text_editor_model.move_cursor_up)
         self.bind("<Down>", self.__text_editor_model.move_cursor_down)
         self.bind("<Right>", self.__text_editor_model.move_cursor_right)
         self.bind("<Left>", self.__text_editor_model.move_cursor_left)
+        self.bind("<Shift-Up>", self.__text_editor_model.move_cursor_up)
+        self.bind("<Shift-Down>", self.__text_editor_model.move_cursor_down)
+        self.bind("<Shift-Right>", self.__text_editor_model.move_cursor_right)
+        self.bind("<Shift-Left>", self.__text_editor_model.move_cursor_left)
         self.bind("<BackSpace>", self.__text_editor_model.delete_before)
+        self.bind("<Delete>", self.__text_editor_model.delete_after)
+        self.bind("<Key>", self.__text_editor_model.insert)
         self.__canvas.pack()
 
     def update_cursor_location(self, loc: Location) -> None:
-        print(loc.x, loc.y)
         self.__canvas.delete(self.__cursor)
         self.__cursor = self.__canvas.create_line(
-            loc.x * self.__font_width,
-            loc.y * self.__font_height,
-            loc.x * self.__font_width,
-            loc.y * self.__font_height + self.__font_height,
+            loc.x * self.__font_width + self.__padding,
+            loc.y * self.__font_height + self.__padding,
+            loc.x * self.__font_width + self.__padding,
+            (loc.y + 1) * self.__font_height + self.__padding,
         )
 
     def update_text(self) -> None:
-        begin = self.__font_width
-        line_height = 0
+        [self.__canvas.delete(line) for line in self.__lines]
+        line_height = self.__padding
         for line in self.__text_editor_model.all_lines():
-            self.__canvas.create_text(0, line_height, text=line, font=self.__font)
+            self.__lines.append(
+                self.__canvas.create_text(
+                    self.__padding,
+                    line_height,
+                    text=line,
+                    font=self.__font,
+                    anchor="nw",
+                )
+            )
             line_height += self.__font_height
 
 
 def main():
-    model = TextEditorModel("test\ntest\ntest")
+    model = TextEditorModel(
+        "testtesttesttest\ntesttesttesttest\ntesttesttesttesttesttesttest\ntesttesttesttesttest"
+    )
     editor = TextEditor(model)
     editor.mainloop()
 
