@@ -113,7 +113,7 @@ class TextEditorModel:
     def __init__(self, lines_string: str):
         self.__lines = lines_string.split("\n")
         self.__selection_range = LocationRange(Location(0, 0), Location(0, 0))
-        self.__cursor_location = Location(0, 0)
+        self.__cursor_location = Location(len(self.__lines[-1]), len(self.__lines) - 1)
         self.__cursor_observers: List[CursorObserver] = list()
         self.__text_observers: List[TextObserver] = list()
 
@@ -133,12 +133,14 @@ class TextEditorModel:
 
     def attach_cursor_observer(self, cursor_observer: CursorObserver) -> None:
         self.__cursor_observers.append(cursor_observer)
+        self.notify_cursor()
 
     def detach_cursor_observer(self, cursor_observer: CursorObserver) -> None:
         self.__cursor_observers.remove(cursor_observer)
 
     def attach_text_observer(self, text_observer: TextObserver) -> None:
         self.__text_observers.append(text_observer)
+        self.notify_text()
 
     def detach_text_observer(self, text_observer: TextObserver) -> None:
         self.__text_observers.remove(text_observer)
@@ -155,38 +157,47 @@ class TextEditorModel:
     def move_cursor_left(self, event: tk.Event) -> None:
         if self.__cursor_location.x > 0:
             self.__cursor_location.x -= 1
-            if event.state & 0x1 != 0:
-                pass
-            else:
-                self.selection_range = LocationRange(
-                    deepcopy(self.__cursor_location), deepcopy(self.__cursor_location)
-                )
-            print(self.selection_range.start.x, self.selection_range.end.x)
             self.notify_cursor()
+        elif self.__cursor_location.x == 0 and self.__cursor_location.y > 0:
+            self.__cursor_location.y -= 1
+            self.notify_cursor()
+        print(self.selection_range.start.x, self.selection_range.end.x)
+        self.selection_range = LocationRange(
+            deepcopy(self.__cursor_location), deepcopy(self.__cursor_location)
+        )
 
     def move_cursor_right(self, event: tk.Event) -> None:
-        self.__cursor_location.x += 1
-        if event.state & 0x1 != 0:
-            pass
-        else:
+        if self.__cursor_location.x < len(self.__lines[self.__cursor_location.y]):
+            self.__cursor_location.x += 1
             self.selection_range = LocationRange(
                 deepcopy(self.__cursor_location), deepcopy(self.__cursor_location)
             )
-        print(self.selection_range.start.x, self.selection_range.end.x)
-        self.notify_cursor()
+            print(self.selection_range.start.x, self.selection_range.end.x)
+            self.notify_cursor()
 
     def move_cursor_up(self, event: tk.Event) -> None:
         if self.__cursor_location.y > 0:
             self.__cursor_location.y -= 1
-            if event.state & 0x1 != 0:
-                self.selection_range.start.y -= 1
+            if len(
+                self.__lines[self.__cursor_location.y + 1][: self.__cursor_location.x]
+            ) > len(self.__lines[self.__cursor_location.y]):
+                self.__cursor_location.x = len(self.__lines[self.__cursor_location.y])
+            self.selection_range = LocationRange(
+                deepcopy(self.__cursor_location), deepcopy(self.__cursor_location)
+            )
             self.notify_cursor()
 
     def move_cursor_down(self, event: tk.Event) -> None:
-        self.__cursor_location.y += 1
-        if event.state & 0x1 == 0:
-            self.selection_range.end.y += 1
-        self.notify_cursor()
+        if self.__cursor_location.y < len(self.__lines) - 1:
+            self.__cursor_location.y += 1
+            if len(
+                self.__lines[self.__cursor_location.y - 1][: self.__cursor_location.x]
+            ) > len(self.__lines[self.__cursor_location.y]):
+                self.__cursor_location.x = len(self.__lines[self.__cursor_location.y])
+            self.selection_range = LocationRange(
+                deepcopy(self.__cursor_location), deepcopy(self.__cursor_location)
+            )
+            self.notify_cursor()
 
     def delete_before(self, event: tk.Event) -> None:
         if (
@@ -200,9 +211,19 @@ class TextEditorModel:
                     ]
                     + self.__lines[self.__cursor_location.y][self.__cursor_location.x :]
                 )
+                if (
+                    len(self.__lines[self.__cursor_location.y]) == 0
+                    and self.__cursor_location.y != 0
+                    and self.__cursor_location.x != 0
+                ):
+                    del self.__lines[self.__cursor_location.y]
+                    self.__cursor_location.y -= 1
+                    self.__cursor_location.x = (
+                        len(self.__lines[self.__cursor_location.y]) + 1
+                    )
                 self.move_cursor_left(event)
         else:
-            pass
+            print("here2")
         self.notify_text()
 
     def delete_after(self, event: tk.Event) -> None:
@@ -214,6 +235,15 @@ class TextEditorModel:
                 self.__lines[self.__cursor_location.y][: self.__cursor_location.x]
                 + self.__lines[self.__cursor_location.y][self.__cursor_location.x + 1 :]
             )
+            if (
+                len(self.__lines[self.__cursor_location.y]) == 0
+                and self.__cursor_location.y != 0
+                and self.__cursor_location.x != 0
+            ):
+                del self.__lines[self.__cursor_location.y]
+                self.__cursor_location.y -= 1
+                self.__cursor_location.x = len(self.__lines[self.__cursor_location.y])
+            self.notify_cursor()
             self.notify_text()
         else:
             pass
@@ -255,15 +285,14 @@ class TextEditor(tk.Tk, CursorObserver, TextObserver):
         self.__font_height = self.__font.metrics("linespace")
         self.__canvas = tk.Canvas(self)
         self.__text_editor_model = text_editor_model
-        self.__text_editor_model.attach_cursor_observer(self)
-        self.__text_editor_model.attach_text_observer(self)
         self.__cursor = self.__canvas.create_line(
             self.__padding,
             self.__padding,
             self.__padding,
             self.__font_height + self.__padding,
         )
-        self.update_text()
+        self.__text_editor_model.attach_cursor_observer(self)
+        self.__text_editor_model.attach_text_observer(self)
         self.bind("<Up>", self.__text_editor_model.move_cursor_up)
         self.bind("<Down>", self.__text_editor_model.move_cursor_down)
         self.bind("<Right>", self.__text_editor_model.move_cursor_right)
@@ -304,7 +333,7 @@ class TextEditor(tk.Tk, CursorObserver, TextObserver):
 
 def main():
     model = TextEditorModel(
-        "testtesttesttest\ntesttesttesttest\ntesttesttesttesttesttesttest\ntesttesttesttesttest"
+        "danas je sunce\nsutra ce kisa\npreksutra pada snijeg\nuvijek je hladno"
     )
     editor = TextEditor(model)
     editor.mainloop()
